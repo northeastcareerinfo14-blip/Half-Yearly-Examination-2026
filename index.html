@@ -376,4 +376,169 @@
       document.getElementById("resTotal").innerText = res.total;
 
       document.getElementById("resMCQStatus").innerHTML = res.mcqPass ? '<span class="text-emerald-600">PASSED</span>' : '<span class="text-red-500">FAILED</span>';
-      document.getElementById("resTHYStatus").innerHTML = res.thyPass ? '<span class="text-emerald-600">PASS
+      document.getElementById("resTHYStatus").innerHTML = res.thyPass ? '<span class="text-emerald-600">PASSED</span>' : '<span class="text-red-500">FAILED</span>';
+      document.getElementById("resIAStatus").innerHTML = res.iaPass ? '<span class="text-emerald-600">PASSED</span>' : '<span class="text-red-500">FAILED</span>';
+
+      const badge = document.getElementById("resStatusBadge");
+      const overallStatusCell = document.getElementById("resOverallStatus");
+
+      if (res.overallPass) {
+        badge.className = "px-3 py-1 text-xs font-extrabold uppercase rounded-full bg-emerald-500 text-white shadow-sm";
+        badge.innerText = "PASS";
+        overallStatusCell.innerHTML = '<span class="text-emerald-600 font-bold">QUALIFIED</span>';
+      } else {
+        badge.className = "px-3 py-1 text-xs font-extrabold uppercase rounded-full bg-red-500 text-white shadow-sm";
+        badge.innerText = "FAIL";
+        overallStatusCell.innerHTML = '<span class="text-red-500 font-bold">NEEDS IMPROVEMENT</span>';
+      }
+
+      resultCard.classList.remove("hidden");
+    }
+
+    function renderAdminTable(dataToRender = students) {
+      const tbody = document.getElementById("adminTableBody");
+      tbody.innerHTML = "";
+
+      dataToRender.forEach(raw => {
+        const res = evaluateStudent(raw);
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-50 transition";
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-mono font-semibold">${res.roll}</td>
+          <td class="py-3 px-4 font-medium">${res.name}</td>
+          <td class="py-3 px-4 text-center">${res.mcq}</td>
+          <td class="py-3 px-4 text-center">${res.thy}</td>
+          <td class="py-3 px-4 text-center">${res.ia}</td>
+          <td class="py-3 px-4 text-center font-bold text-indigo-700">${res.total}</td>
+          <td class="py-3 px-4 text-center">
+            <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full ${res.overallPass ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}">
+              ${res.overallPass ? 'PASS' : 'FAIL'}
+            </span>
+          </td>
+          <td class="py-3 px-4 text-right space-x-2">
+            <button onclick="editStudent('${res.roll}')" class="text-xs text-blue-600 hover:underline"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+            <button onclick="deleteStudent('${res.roll}')" class="text-xs text-red-600 hover:underline"><i class="fa-solid fa-trash"></i> Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function filterAdminTable() {
+      const q = document.getElementById("adminSearch").value.toLowerCase();
+      const filtered = students.filter(s => s.name.toLowerCase().includes(q) || s.roll.toLowerCase().includes(q));
+      renderAdminTable(filtered);
+    }
+
+    let editingRoll = null;
+    function openModal(roll = null) {
+      editingRoll = roll;
+      const modal = document.getElementById("entryModal");
+      const title = document.getElementById("modalTitle");
+
+      if (roll) {
+        title.innerText = "Edit Student Result";
+        const target = students.find(s => s.roll === roll);
+        document.getElementById("modalRoll").value = target.roll;
+        document.getElementById("modalRoll").disabled = true;
+        document.getElementById("modalName").value = target.name;
+        document.getElementById("modalMCQ").value = target.mcq;
+        document.getElementById("modalTHY").value = target.thy;
+        document.getElementById("modalIA").value = target.ia;
+      } else {
+        title.innerText = "Add Student Result";
+        document.getElementById("modalRoll").disabled = false;
+        document.getElementById("modalRoll").value = "";
+        document.getElementById("modalName").value = "";
+        document.getElementById("modalMCQ").value = 0;
+        document.getElementById("modalTHY").value = 0;
+        document.getElementById("modalIA").value = 0;
+      }
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function closeModal() {
+      const modal = document.getElementById("entryModal");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    function saveStudent(e) {
+      e.preventDefault();
+      const roll = document.getElementById("modalRoll").value.trim();
+      const name = document.getElementById("modalName").value.trim();
+      const mcq = parseInt(document.getElementById("modalMCQ").value) || 0;
+      const thy = parseInt(document.getElementById("modalTHY").value) || 0;
+      const ia = parseInt(document.getElementById("modalIA").value) || 0;
+
+      const existingIdx = students.findIndex(s => s.roll.toLowerCase() === roll.toLowerCase());
+
+      if (editingRoll) {
+        const idx = students.findIndex(s => s.roll === editingRoll);
+        if (idx !== -1) students[idx] = { roll, name, mcq, thy, ia };
+      } else if (existingIdx !== -1) {
+        students[existingIdx] = { roll, name, mcq, thy, ia };
+      } else {
+        students.push({ roll, name, mcq, thy, ia });
+      }
+
+      saveData();
+      renderAdminTable();
+      closeModal();
+    }
+
+    function editStudent(roll) {
+      openModal(roll);
+    }
+
+    function deleteStudent(roll) {
+      if (confirm(`Are you sure you want to delete result for Roll ${roll}?`)) {
+        students = students.filter(s => s.roll !== roll);
+        saveData();
+        renderAdminTable();
+      }
+    }
+
+    function handleBulkCSV(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const text = evt.target.result;
+        const lines = text.split("\n");
+        let count = 0;
+
+        lines.forEach((line, index) => {
+          if (index === 0 && line.toLowerCase().includes("roll")) return;
+          const parts = line.split(",").map(p => p.trim());
+          if (parts.length >= 5) {
+            const [roll, name, mcq, thy, ia] = parts;
+            if (roll && name) {
+              const existingIdx = students.findIndex(s => s.roll === roll);
+              const rec = { roll, name, mcq: parseInt(mcq)||0, thy: parseInt(thy)||0, ia: parseInt(ia)||0 };
+              if (existingIdx !== -1) students[existingIdx] = rec;
+              else students.push(rec);
+              count++;
+            }
+          }
+        });
+
+        saveData();
+        renderAdminTable();
+        alert(`Successfully imported/updated ${count} records.`);
+      };
+      reader.readAsText(file);
+    }
+
+    function resetData() {
+      if (confirm("Reset dataset back to original sample records?")) {
+        students = [...initialData];
+        saveData();
+        renderAdminTable();
+      }
+    }
+  </script>
+</body>
+</html>
